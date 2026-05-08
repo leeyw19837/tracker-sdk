@@ -72,7 +72,28 @@ import { performancePlugin, errorPlugin, routerPlugin, autoTracker } from '@jaso
 
 tracker.use(performancePlugin);
 tracker.use(errorPlugin);
+
+// 路由监控 - 基础用法（监听所有路由）
 tracker.use(routerPlugin);
+
+// 路由监控 - 只监听指定路由（白名单）
+tracker.use(routerPlugin, {
+  system: 'my-app',
+  include: ['/dashboard', '/user/*', /^\/product\//]
+});
+
+// 路由监控 - 排除指定路由（黑名单）
+tracker.use(routerPlugin, {
+  system: 'my-app',
+  exclude: ['/login', '/register', '/admin/*']
+});
+
+// 路由监控 - 自定义过滤函数
+tracker.use(routerPlugin, {
+  system: 'my-app',
+  filter: (path) => !path.startsWith('/test-')  // 排除测试路由
+});
+
 tracker.use(autoTracker);
 ```
 
@@ -117,6 +138,52 @@ tracker.enter({
 ### `tracker.use(plugin)`
 加载并启用插件。
 - **plugin**: 插件函数。用于扩展 SDK 的采集能力（如 `performancePlugin`, `errorPlugin` 等）。
+
+#### Router Plugin 配置选项
+
+`routerPlugin` 支持以下配置项：
+
+```javascript
+tracker.use(routerPlugin, {
+  system: 'my-app',              // 系统标识，默认 'router'
+  
+  // 模块名称映射函数（可选）
+  moduleMapper: (path) => {
+    if (path === '/dashboard') return '仪表盘';
+    return path;
+  },
+  
+  // 白名单：只监听这些路由（可选）
+  include: [
+    '/dashboard',        // 完全匹配
+    '/user/*',           // 前缀匹配（所有 /user/ 开头的路径）
+    /^\/product\/\d+$/  // 正则表达式匹配
+  ],
+  
+  // 黑名单：排除这些路由（可选）
+  exclude: [
+    '/login',
+    '/admin/*'
+  ],
+  
+  // 自定义过滤函数（优先级最高）
+  filter: (path) => {
+    // 返回 true 表示追踪，false 表示不追踪
+    return !path.startsWith('/test-');
+  }
+});
+```
+
+**过滤选项说明：**
+- **include**（白名单）：只有匹配的路由会被追踪，其他路由被忽略
+- **exclude**（黑名单）：匹配的路由不会被追踪，其他路由都被追踪
+- **filter**（自定义函数）：最灵活的方式，可以实现任意复杂的过滤逻辑
+- **优先级**：filter > include > exclude（如果同时配置多个，只有优先级最高的生效）
+
+**匹配模式：**
+- 字符串完全匹配：`'/dashboard'` 匹配 `/dashboard`
+- 字符串前缀匹配：`'/user/*'` 匹配所有以 `/user/` 开头的路径
+- 正则表达式：`/^\/product\/\d+$/` 匹配 `/product/123` 等
 
 ## 插件系统
 
