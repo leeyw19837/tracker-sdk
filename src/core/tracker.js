@@ -143,11 +143,19 @@ export default class Tracker {
      */
     leave(force = false) {
         if (!this.current) {
+            console.log('[Tracker SDK] Leave called but no current module');
             return;
         }
 
         const endTime = force ? now() : this.lastActiveTime;
         const duration = Math.max(0, endTime - this.current.enterTime);
+
+        console.log('[Tracker SDK] Leaving module:', {
+            module: this.current.module,
+            system: this.current.system,
+            duration,
+            force
+        });
 
         // 构建 context 对象
         const context = {
@@ -173,6 +181,7 @@ export default class Tracker {
             ext: extData
         };
 
+        console.log('[Tracker SDK] Pushing module_leave event to queue:', event);
         this.queue.push(event);
         this.current = null;
     }
@@ -230,17 +239,54 @@ export default class Tracker {
 
     /***********生命周期**********/
     _bindLifecycle() {
+        // 用于保存页面隐藏前的模块信息
+        let hiddenModule = null;
+
         // 页面卸载或隐藏时，上报当前模块的停留时间并强制刷新队列
         const flushData = () => {
+            console.log('[Tracker SDK] Lifecycle: Page hidden/unloading, flushing data...');
+            console.log('[Tracker SDK] Current module:', this.current);
+            console.log('[Tracker SDK] Queue length:', this.queue.list.length);
+            
+            // 保存当前模块信息，以便页面恢复时重新 enter
+            if (this.current) {
+                hiddenModule = { ...this.current };
+                console.log('[Tracker SDK] Saved module info for restoration:', hiddenModule.module);
+            }
+            
             this.leave(true);
             this.queue.flush(true); // 传入 true，标记为页面关闭场景
+            
+            console.log('[Tracker SDK] Data flushed successfully');
         };
 
         window.addEventListener('beforeunload', flushData);
 
         document.addEventListener('visibilitychange', () => {
+            console.log('[Tracker SDK] Visibility changed:', document.visibilityState);
+            
             if (document.visibilityState === 'hidden') {
+                console.log('[Tracker SDK] Page is now hidden, triggering flush...');
                 flushData();
+            } else if (document.visibilityState === 'visible') {
+                console.log('[Tracker SDK] Page is now visible');
+                
+                // 如果之前有保存的模块信息，重新 enter
+                if (hiddenModule) {
+                    console.log('[Tracker SDK] Restoring module:', hiddenModule.module);
+                    
+                    // 清除 enterTime，使用当前时间作为新的进入时间
+                    const { enterTime, ...moduleInfo } = hiddenModule;
+                    
+                    this.enter(moduleInfo);
+                    
+                    // 重置 hiddenModule
+                    hiddenModule = null;
+                    
+                    console.log('[Tracker SDK] Module restored successfully');
+                } else {
+                    console.log('[Tracker SDK] No module to restore');
+                }
             }
         });
     }

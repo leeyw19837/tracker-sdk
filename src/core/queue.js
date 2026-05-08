@@ -43,8 +43,11 @@ export default class Queue {
      */
     flush(isFlush = false) {
         if (!this.list.length) {
+            console.log('[Tracker SDK] Queue flush called but queue is empty');
             return;
         }
+
+        console.log('[Tracker SDK] Flushing queue, items:', this.list.length, 'isFlush:', isFlush);
 
         // 复制一份数据列表，防止在发送过程中 list 被修改
         const dataToSend = [...this.list];
@@ -52,9 +55,11 @@ export default class Queue {
 
         try {
             // 逐条发送数据，而不是批量发送
-            dataToSend.forEach(item => {
+            dataToSend.forEach((item, index) => {
+                console.log(`[Tracker SDK] Sending event ${index + 1}/${dataToSend.length}:`, item.event);
                 this.flushFn(item, isFlush);
             });
+            console.log('[Tracker SDK] All events sent successfully');
         } catch (error) {
             console.error("[Tracker SDK] Failed to flush data:", error);
         } finally {

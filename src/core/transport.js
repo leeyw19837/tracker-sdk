@@ -14,7 +14,18 @@
 @param {boolean} useBeacon - 是否强制使用 sendBeacon（用于页面关闭场景）
  */
 export function send(url, data, token = {}, useBeacon = false) {
-    if (!url) return;
+    if (!url) {
+        console.warn('[Tracker SDK] Send called without URL');
+        return;
+    }
+
+    console.log('[Tracker SDK] Sending data:', {
+        url,
+        event: data.event,
+        module: data.module,
+        useBeacon,
+        hasToken: !!token
+    });
 
     const body = JSON.stringify(data);
 
@@ -28,13 +39,16 @@ export function send(url, data, token = {}, useBeacon = false) {
 
     // 1. 如果强制使用 Beacon 或 fetch 不可用，直接使用 sendBeacon
     if (useBeacon && typeof navigator !== 'undefined' && navigator.sendBeacon) {
+        console.log('[Tracker SDK] Using sendBeacon for transport');
         let beaconUrl = url;
         if (token) {
             const separator = url.includes('?') ? '&' : '?';
             beaconUrl = `${url}${separator}Authorization=${encodeURIComponent('Bearer ' + token)}`;
         }
         const blob = new Blob([body], {type: 'application/json'});
-        return navigator.sendBeacon(beaconUrl, blob);
+        const result = navigator.sendBeacon(beaconUrl, blob);
+        console.log('[Tracker SDK] sendBeacon result:', result);
+        return result;
     }
 
     // 2. 正常场景优先使用 fetch + keepalive
