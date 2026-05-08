@@ -1,0 +1,78 @@
+<!--
+测试说明
+1.
+自动上报检查：
+◦
+点击页面上的“点击登录”按钮，你会看到一个请求发往 endPoint。
+◦
+请求 Payload 中应包含 event: "login_click" 以及 source: "header_nav"。
+2.
+路由追踪检查：
+◦
+点击跳转按钮，routerPlugin 会检测到 pushState 变化，自动触发 module_leave (针对旧页面) 和 enter (针对新路径)。
+3.
+批量上报机制：
+◦
+我在 demo.js 中设置了 maxBatchSize: 5。你可以连续快速点击按钮，观察 SDK 是否在累积 5 条数据后才发 起一次请求。
+4.
+页面关闭/隐藏：
+◦
+刷新页面或切换标签页。在 beforeunload 或 visibilitychange 触发时，SDK 会通过 navigator.sendBeacon 立即上报当前模块的停留时间，并清空队列。
+5.
+性能上报：
+◦
+页面加载完成后（load 事件后），会自动触发一个 event: "performance" 的数据包，包含 load 和 dom 的耗时。
+如何运行
+1.
+确保你在项目根目录下。
+2.
+你可以使用 npx serve . 或者在 IDE 中右键 examples/index.html 选择 "Open in Browser"。
+3.
+由于使用了 type="module"，请务必通过 HTTP 服务器访问（即 http://localhost:...），直接从本地文件系统打开（file://...）可能会因跨域限制导致 JS 无法运行。
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Tracker SDK Demo</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; line-height: 1.6; }
+        .card { border: 1px solid #ccc; padding: 15px; margin-bottom: 10px; border-radius: 4px; }
+        button { padding: 8px 16px; cursor: pointer; }
+        code { background: #f4f4f4; padding: 2px 4px; }
+    </style>
+</head>
+<body>
+    <h1>Tracker SDK 功能测试</h1>
+
+    <div class="card">
+        <h3>1. 自动埋点测试 (autoTracker)</h3>
+        <p>点击下方按钮，SDK 会根据 <code>data-track</code> 自动采集。</p>
+        <!-- 自动埋点：指定事件名为 login_click，并携带额外参数 -->
+        <button data-track="login_click" data-track-source="header_nav">点击登录</button>
+        <button data-track="add_cart" data-track-product="iPhone 15">加入购物车</button>
+    </div>
+
+    <div class="card">
+        <h3>2. 路由变化测试 (routerPlugin)</h3>
+        <button onclick="history.pushState({}, '', '#page1')">跳转到 Page 1 (#)</button>
+        <button onclick="history.pushState({}, '', '/demo/page2')">跳转到 Page 2 (Path)</button>
+    </div>
+
+    <div class="card">
+        <h3>3. 错误上报测试 (errorPlugin)</h3>
+        <button onclick="throw new Error('手动触发的 JS 错误')">触发 JS Error</button>
+        <button onclick="Promise.reject('手动拒绝的 Promise')">触发 Promise Reject</button>
+    </div>
+
+    <div class="card">
+        <h3>4. 页面操作</h3>
+        <button onclick="location.reload()">刷新页面 (测试性能上报 & 队列刷新)</button>
+    </div>
+
+    <p>💡 请打开浏览器控制台 (F12) 的 <b>Network</b> 标签，查看数据上报请求。</p>
+
+    <!-- 模拟 ESM 加载 -->
+    <script type="module" src="./demo.js"></script>
+</body>
+</html>

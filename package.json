@@ -1,0 +1,32 @@
+{
+  "name": "@jasolar/tracker-sdk",
+  "version": "1.0.5",
+  "type": "module",
+  "main": "dist/index.cjs.js",
+  "module": "dist/index.esm.js",
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "rollup -c",
+    "dev": "rollup -c -w",
+    "publish:npm": "npm run build && npm publish",
+    "link": "npm link",
+    "unlink": "npm unlink"
+  },
+  "keywords": [],
+  "author": "JASolar IMRI",
+  "license": "ISC",
+  "description": "企业自研前端埋点库。",
+  "devDependencies": {
+    "@babel/core": "^7.29.0",
+    "@babel/preset-env": "^7.29.2",
+    "@rollup/plugin-babel": "^7.0.0",
+    "@rollup/plugin-commonjs": "^29.0.2",
+    "@rollup/plugin-node-resolve": "^16.0.3",
+    "rollup": "^4.30.1"
+  }
+}
