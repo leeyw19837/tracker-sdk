@@ -439,5 +439,5 @@ npm publish
 ## 💡 提示
 
 - 查看 `examples/vue3-usage-example.js` 获取完整的 Vue3 使用示例
-- 查看详细文档：[LOCAL_TEST.md](./LOCAL_TEST.md)
+- 查看详细文档：[LOCAL_TEST.md](LOCAL_TEST.md)
 - 运行自动化测试脚本：`./test-local.sh [vue-project-path]`

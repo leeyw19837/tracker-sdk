@@ -253,10 +253,10 @@ node examples/router-filter-examples.js
 
 ## 📚 相关文档
 
-- [README.md](./README.md) - 项目主文档
-- [MODULE_ENTER_LEAVE.md](./MODULE_ENTER_LEAVE.md) - 模块进入/离开事件详细说明
-- [examples/router-filter-examples.js](./examples/router-filter-examples.js) - 完整使用示例
-- [LOCAL_TEST.md](./LOCAL_TEST.md) - 本地测试指南
+- [README.md](../README.md) - 项目主文档
+- [MODULE_ENTER_LEAVE.md](MODULE_ENTER_LEAVE.md) - 模块进入/离开事件详细说明
+- [examples/router-filter-examples.js](../examples/router-filter-examples.js) - 完整使用示例
+- [LOCAL_TEST.md](LOCAL_TEST.md) - 本地测试指南
 
 ## 💡 最佳实践
 

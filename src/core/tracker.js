@@ -1,6 +1,6 @@
 import Queue from "./queue.js";
 import { send } from "./transport.js";
-import { getSessionId, refreshSession } from "./session.js"; // 引入 refreshSession
+import { getSessionId, refreshSession, resetSession } from "./session.js"; // 引入 refreshSession 和 resetSession
 import { uuid } from "../utils/uuid.js";
 import { now, formatTime } from "../utils/time.js";
 import { throttle } from "../utils/throttle.js";
@@ -15,6 +15,7 @@ export default class Tracker {
      * @param {number} [options.delay=1000] - 批量上报延迟
      * @param {number} [options.maxBatchSize=10] - 批量上报最大条数
      * @param {string} [options.token] - 数据上报接口的 Token
+     * @param {number} [options.sessionTimeout=1800000] - Session 超时时间（毫秒），默认30分钟
      */
     constructor(options = {}) {
         if (!options.endPoint) {
@@ -24,6 +25,7 @@ export default class Tracker {
         this.options = {
             delay: 1000,
             maxBatchSize: 10,
+            sessionTimeout: 30 * 60 * 1000, // 默认30分钟
             ...options
         };
         
@@ -35,6 +37,12 @@ export default class Tracker {
 
         this.current = null;
         this.lastActiveTime = now();
+        
+        // 超时检测定时器
+        this.timeoutTimer = null;
+        
+        // 标记是否因超时而离开（用于重新激活时判断）
+        this.isTimedOut = false;
 
         this.queue = new Queue((data, isFlush) => {
             if (this.options.endPoint) {
@@ -51,6 +59,9 @@ export default class Tracker {
         // 自动绑定活跃检测和生命周期监听
         this._bindActivity();
         this._bindLifecycle();
+        
+        // 启动超时检测
+        this._startTimeoutCheck();
     }
 
     /***********插件**********/
@@ -108,6 +119,9 @@ export default class Tracker {
             ...module,
             enterTime: now()
         };
+        
+        // 清除超时标记
+        this.isTimedOut = false;
 
         // 构建 context 对象
         const context = {
@@ -140,8 +154,9 @@ export default class Tracker {
     /**
      * 记录离开模块
      * @param {boolean} force - 是否强制使用当前时间作为结束时间（用于页面卸载等场景）
+     * @param {boolean} isTimeout - 是否因为超时而离开（内部使用）
      */
-    leave(force = false) {
+    leave(force = false, isTimeout = false) {
         if (!this.current) {
             console.log('[Tracker SDK] Leave called but no current module');
             return;
@@ -154,7 +169,8 @@ export default class Tracker {
             module: this.current.module,
             system: this.current.system,
             duration,
-            force
+            force,
+            isTimeout
         });
 
         // 构建 context 对象
@@ -183,7 +199,16 @@ export default class Tracker {
 
         console.log('[Tracker SDK] Pushing module_leave event to queue:', event);
         this.queue.push(event);
-        this.current = null;
+        
+        // 如果是因为超时而离开，保留 current 信息以便重新激活时使用
+        if (isTimeout) {
+            this.isTimedOut = true;
+            console.log('[Tracker SDK] Module info preserved for re-activation');
+        } else {
+            // 正常离开，清除 current
+            this.current = null;
+            this.isTimedOut = false;
+        }
     }
 
     /**
@@ -223,8 +248,48 @@ export default class Tracker {
     /***********活跃检测**********/
     _bindActivity() {
         const update = () => {
+            const wasInactive = this._checkInactive();
             this.lastActiveTime = now();
             refreshSession(); // 用户活跃时刷新 Session 有效期
+            
+            // 如果之前因为超时而离开了，现在重新激活，需要重新 enter
+            if (wasInactive && this.isTimedOut && this.current) {
+                console.log('[Tracker SDK] User became active again after timeout');
+                
+                // 重置超时标记
+                this.isTimedOut = false;
+                
+                // 重新记录进入时间
+                this.current.enterTime = now();
+                
+                // 构建 context 对象
+                const context = {
+                    device_id: this.deviceId,
+                    session_id: this.sessionId,
+                    user_id: this.userId
+                };
+
+                // 构建 ext 对象
+                const extData = {
+                    ...this.globalExt,
+                    ...this.current.ext
+                };
+
+                // 上报 module_enter 事件
+                const event = {
+                    system: this.current.system || '',
+                    module: this.current.module || '',
+                    sub_module: this.current.sub_module || '',
+                    duration: 0,
+                    event: 'module_enter',
+                    timestamp: formatTime(now()),
+                    context,
+                    ext: extData
+                };
+
+                this.queue.push(event);
+                console.log('[Tracker SDK] Re-entered module after inactivity:', this.current.module);
+            }
         };
 
         const events = ['click', 'keydown', 'touchstart'];
@@ -235,6 +300,50 @@ export default class Tracker {
         // 对高频事件进行节流
         document.addEventListener('mousemove', throttle(update, 5000), { passive: true });
         document.addEventListener('scroll', throttle(update, 500), { passive: true });
+    }
+    
+    /**
+     * 检查用户是否处于非活跃状态（超过超时时间）
+     * @returns {boolean} 是否是非活跃状态
+     */
+    _checkInactive() {
+        const inactiveTime = now() - this.lastActiveTime;
+        return inactiveTime >= this.options.sessionTimeout;
+    }
+    
+    /**
+     * 启动超时检测定时器
+     */
+    _startTimeoutCheck() {
+        // 动态计算检测间隔：超时时间的 1/6，但不超过 30 秒，不少于 5 秒
+        const checkInterval = Math.min(
+            Math.max(this.options.sessionTimeout / 6, 5 * 1000),
+            30 * 1000
+        );
+        
+        console.log('[Tracker SDK] Timeout check interval:', (checkInterval / 1000).toFixed(1), 's');
+        
+        this.timeoutTimer = setInterval(() => {
+            // 只要有 current 且未处于超时状态，就检测是否超时
+            if (this.current && !this.isTimedOut && this._checkInactive()) {
+                console.log('[Tracker SDK] User inactive for too long, triggering auto leave');
+                this.leave(true, true); // 强制上报离开事件，标记为超时
+                
+                // 重置 Session，认为会话结束
+                this.sessionId = resetSession();
+                console.log('[Tracker SDK] Session reset due to inactivity, new sessionId:', this.sessionId);
+            }
+        }, checkInterval);
+    }
+    
+    /**
+     * 停止超时检测
+     */
+    _stopTimeoutCheck() {
+        if (this.timeoutTimer) {
+            clearInterval(this.timeoutTimer);
+            this.timeoutTimer = null;
+        }
     }
 
     /***********生命周期**********/
@@ -247,6 +356,9 @@ export default class Tracker {
             console.log('[Tracker SDK] Lifecycle: Page hidden/unloading, flushing data...');
             console.log('[Tracker SDK] Current module:', this.current);
             console.log('[Tracker SDK] Queue length:', this.queue.list.length);
+            
+            // 停止超时检测
+            this._stopTimeoutCheck();
             
             // 保存当前模块信息，以便页面恢复时重新 enter
             if (this.current) {
@@ -270,6 +382,9 @@ export default class Tracker {
                 flushData();
             } else if (document.visibilityState === 'visible') {
                 console.log('[Tracker SDK] Page is now visible');
+                
+                // 重新启动超时检测
+                this._startTimeoutCheck();
                 
                 // 如果之前有保存的模块信息，重新 enter
                 if (hiddenModule) {
