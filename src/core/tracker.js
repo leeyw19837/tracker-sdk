@@ -155,8 +155,9 @@ export default class Tracker {
      * 记录离开模块
      * @param {boolean} force - 是否强制使用当前时间作为结束时间（用于页面卸载等场景）
      * @param {boolean} isTimeout - 是否因为超时而离开（内部使用）
+     * @param {string} reason - 离开原因（可选）：'timeout' | 'visibility' | 'normal'
      */
-    leave(force = false, isTimeout = false) {
+    leave(force = false, isTimeout = false, reason = 'normal') {
         if (!this.current) {
             console.log('[Tracker SDK] Leave called but no current module');
             return;
@@ -170,7 +171,8 @@ export default class Tracker {
             system: this.current.system,
             duration,
             force,
-            isTimeout
+            isTimeout,
+            reason
         });
 
         // 构建 context 对象
@@ -194,7 +196,10 @@ export default class Tracker {
             event: 'module_leave',
             timestamp: formatTime(now()),
             context,
-            ext: extData
+            ext: {
+                ...extData,
+                leave_reason: reason // 添加离开原因
+            }
         };
 
         console.log('[Tracker SDK] Pushing module_leave event to queue:', event);
@@ -366,7 +371,7 @@ export default class Tracker {
                 console.log('[Tracker SDK] Saved module info for restoration:', hiddenModule.module);
             }
             
-            this.leave(true);
+            this.leave(true, false, 'visibility'); // 标记为可见性变化导致的离开
             this.queue.flush(true); // 传入 true，标记为页面关闭场景
             
             console.log('[Tracker SDK] Data flushed successfully');
