@@ -23,15 +23,19 @@ export default function routerPlugin(tracker, options = {}) {
     let lastPath = window.location.pathname + window.location.search + window.location.hash;
 
     /**
-     * 根据路径获取模块名称
+     * 根据路径获取模块信息
      */
-    const getModuleName = (path) => {
+    const getModuleInfo = (path) => {
         // 如果提供了自定义映射函数，使用它
         if (typeof moduleMapper === 'function') {
-            return moduleMapper(path);
+            const result = moduleMapper(path);
+            if (typeof result === 'string') {
+                return { module: result };
+            }
+            return result || { module: path };
         }
         // 否则使用完整路径
-        return path;
+        return { module: path };
     };
 
     /**
@@ -120,7 +124,7 @@ export default function routerPlugin(tracker, options = {}) {
                 if (!tracker.current) {
                     console.log('[Tracker SDK] Tracker current is null, re-entering current route');
                     tracker.enter({
-                        module: getModuleName(currentPath),
+                        ...getModuleInfo(currentPath),
                         system
                     });
                 }
@@ -135,7 +139,7 @@ export default function routerPlugin(tracker, options = {}) {
             }
             
             tracker.enter({
-                module: getModuleName(currentPath), // 使用映射后的模块名
+                ...getModuleInfo(currentPath), // 使用映射后的模块信息
                 system // 使用配置的 system
             });
             lastPath = currentPath;
@@ -151,7 +155,7 @@ export default function routerPlugin(tracker, options = {}) {
             lastPath = initialPath; // 更新 lastPath 为实际初始路径
             
             tracker.enter({
-                module: getModuleName(initialPath),
+                ...getModuleInfo(initialPath),
                 system
             });
             console.log('[Tracker SDK] Initial route tracked:', initialPath);
