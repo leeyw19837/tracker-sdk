@@ -254,6 +254,15 @@ export default class Tracker {
     _bindActivity() {
         const update = () => {
             const wasInactive = this._checkInactive();
+            
+            // 如果确实已经处于非活跃状态太久，但定时器还没来得及触发 (例如电脑休眠唤醒)
+            // 此时应主动触发 leave()，并重置会话
+            if (wasInactive && !this.isTimedOut && this.current) {
+                console.log('[Tracker SDK] Activity detected after long inactivity, forcing timeout leave');
+                this.leave(false, true, 'timeout');
+                this.sessionId = resetSession();
+            }
+
             this.lastActiveTime = now();
             refreshSession(); // 用户活跃时刷新 Session 有效期
             
@@ -320,6 +329,8 @@ export default class Tracker {
      * 启动超时检测定时器
      */
     _startTimeoutCheck() {
+        this._stopTimeoutCheck(); // 确保不重复启动定时器
+        
         // 动态计算检测间隔：超时时间的 1/6，但不超过 30 秒，不少于 5 秒
         const checkInterval = Math.min(
             Math.max(this.options.sessionTimeout / 6, 5 * 1000),
@@ -332,7 +343,7 @@ export default class Tracker {
             // 只要有 current 且未处于超时状态，就检测是否超时
             if (this.current && !this.isTimedOut && this._checkInactive()) {
                 console.log('[Tracker SDK] User inactive for too long, triggering auto leave');
-                this.leave(true, true); // 强制上报离开事件，标记为超时
+                this.leave(false, true, 'timeout'); // 使用 lastActiveTime 结算，标记为超时
                 
                 // 重置 Session，认为会话结束
                 this.sessionId = resetSession();
